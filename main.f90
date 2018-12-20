@@ -4,9 +4,11 @@ program main
     integer :: times = 1
 
     call init
-    call timer(intrinsic, times)
-    call timer(mkl, times)
-    call finilize
+    call timer(single_intrinsic, times)
+    call timer(single_mkl, times)
+    call timer(serial_intrinsic, times)
+    call timer(serial_mkl, times)
+    !call finilize
 
     contains
 

@@ -68,6 +68,7 @@ module m_gather
             real(8) :: deltax(-ilw:ilw), deltay(-ilw:ilw), deltaz(-ilw:ilw)
             integer iv, i, j, k
 
+            !$omp parallel do private(i, j, k, deltax, deltay, deltaz)
             do iv = 1, nv
                 do i = -ilw, ilw
                     deltax(i) = delta((xlg(iv, 1) - mesh(ilg(iv, 1) + i, 1)) / dh)
@@ -76,11 +77,12 @@ module m_gather
                 end do
 
                 ulg(iv) = 0
+                !DIR$ SIMD PRIVATE(I,J) REDUCTION(+:ulg)
                 do k = -ilw, ilw
                     do j = -ilw, ilw
                         do i = -ilw, ilw
                             ulg(iv) = ulg(iv) + u(ilg(iv, 1) + i, ilg(iv, 2) + j, ilg(iv, 3) + k) &
-                            * deltax(i) * deltay(j) * deltaz(k)
+                                    * deltax(i) * deltay(j) * deltaz(k)
                         end do
                     end do
                 end do
@@ -89,6 +91,53 @@ module m_gather
             ! disturb u
             u(ilg(1, 1), ilg(1, 2), ilg(1, 3)) = u(ilg(1, 1), ilg(1, 2), ilg(1, 3)) + 1.0
         end subroutine trival_gather
+
+        subroutine trival_gather2
+            implicit none
+            include 'mkl.fi'
+            !include 'mkl_vml.f90'
+            real(8) :: deltax(-ilw:ilw+1), deltay(-ilw:ilw+1), deltaz(-ilw:ilw+1)
+            real(8) :: u2d(-ilw:ilw+1, -ilw:ilw+1), u1d(-ilw:ilw+1)
+            integer iv, i, j, k
+
+            !$omp parallel do private(i, j, k, deltax, deltay, deltaz, u2d, u1d)
+            do iv = 1, nv
+                do i = -ilw, ilw + 1
+                    deltax(i) = delta((xlg(iv, 1) - mesh(ilg(iv, 1) + i, 1)) / dh)
+                    deltay(i) = delta((xlg(iv, 2) - mesh(ilg(iv, 2) + i, 2)) / dh)
+                    deltaz(i) = delta((xlg(iv, 3) - mesh(ilg(iv, 3) + i, 3)) / dh)
+                end do
+
+                do k = -ilw, ilw
+                    do j = -ilw, ilw
+                        u2d(j, k) = u(ilg(iv, 1) - ilw, ilg(iv, 2) + j, ilg(iv, 3) + k)  * deltax(-ilw) &
+                                + u(ilg(iv, 1) - ilw + 1, ilg(iv, 2) + j, ilg(iv, 3) + k)  * deltax(-ilw + 1) &
+                                + u(ilg(iv, 1) - ilw + 2, ilg(iv, 2) + j, ilg(iv, 3) + k)  * deltax(-ilw + 2) &
+                                + u(ilg(iv, 1) - ilw + 3, ilg(iv, 2) + j, ilg(iv, 3) + k)  * deltax(-ilw + 3) &
+                                + u(ilg(iv, 1) - ilw + 4, ilg(iv, 2) + j, ilg(iv, 3) + k)  * deltax(-ilw + 4) &
+                                + u(ilg(iv, 1) - ilw + 5, ilg(iv, 2) + j, ilg(iv, 3) + k)  * deltax(-ilw + 5) &
+                                + u(ilg(iv, 1) - ilw + 6, ilg(iv, 2) + j, ilg(iv, 3) + k)  * deltax(-ilw + 6) &
+                                + u(ilg(iv, 1) - ilw + 7, ilg(iv, 2) + j, ilg(iv, 3) + k)  * deltax(-ilw + 7)
+                    end do
+                end do
+
+                do k = -ilw, ilw
+                    u1d(i) = u2d(-ilw, k) * deltay(-ilw) &
+                            + u2d(-ilw + 1, k) * deltay(-ilw + 1) &
+                            + u2d(-ilw + 2, k) * deltay(-ilw + 2) &
+                            + u2d(-ilw + 3, k) * deltay(-ilw + 3) &
+                            + u2d(-ilw + 4, k) * deltay(-ilw + 4) &
+                            + u2d(-ilw + 5, k) * deltay(-ilw + 5) &
+                            + u2d(-ilw + 6, k) * deltay(-ilw + 6) &
+                            + u2d(-ilw + 7, k) * deltay(-ilw + 7)
+                end do
+
+                ulg(iv) = ddot(8, u1d, 1, deltaz, 1)
+            end do
+
+            ! disturb u
+            u(ilg(1, 1), ilg(1, 2), ilg(1, 3)) = u(ilg(1, 1), ilg(1, 2), ilg(1, 3)) + 1.0
+        end subroutine trival_gather2
 
         subroutine trival_scatter
             implicit none
@@ -121,6 +170,7 @@ module m_gather
             integer iv, i, j, k, status
             real(8) :: deltax(-ilw:ilw), deltay(-ilw:ilw), deltaz(-ilw:ilw)
 
+            !$omp parallel do private(i, j, k, deltax, deltay, deltaz)
             do iv = 1, nv
                 do i = -ilw, ilw
                     deltax(i) = delta((xlg(iv, 1) - mesh(ilg(iv, 1) + i, 1)) / dh)
@@ -144,12 +194,14 @@ module m_gather
             status = mkl_sparse_d_create_csr(e_csr, sparse_index_base_one, &
             nv, n ** 3, e_rs, e_re, e_col, e_val)
             e_descr % type = sparse_matrix_type_general
+            !status = mkl_sparse_set_mv_hint(e_csr, sparse_operation_non_transpose, e_descr, 1)
+            !status = mkl_sparse_optimize(e_csr)
             status = mkl_sparse_d_mv(sparse_operation_non_transpose, 1.0, e_csr, e_descr, u, 0., ulg)
             ! disturb u
             u(ilg(1, 1), ilg(1, 2), ilg(1, 3)) = u(ilg(1, 1), ilg(1, 2), ilg(1, 3)) + 1.0
-            !status = mkl_sparse_destroy(e_csr)
-            status = mkl_sparse_set_mv_hint(e_csr, sparse_operation_transpose, e_descr, 1)
-            status = mkl_sparse_optimize(e_csr)
+            status = mkl_sparse_destroy(e_csr)
+!            status = mkl_sparse_set_mv_hint(e_csr, sparse_operation_transpose, e_descr, 1)
+!            status = mkl_sparse_optimize(e_csr)
         end subroutine matrix_gather
 
         subroutine matrix_scatter

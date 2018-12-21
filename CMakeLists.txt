@@ -6,7 +6,8 @@ PROJECT(mkl_perfm_test)
 ENABLE_LANGUAGE(Fortran)
 
 SET(CMAKE_Fortran_FLAGS "-r8 -g -align -mkl=parallel -mcmodel=medium -heap-arrays 0 -traceback")
-SET(CMAKE_Fortran_FLAGS_RELEASE "-O3 -qopenmp -unroll -xHost")
+SET(CMAKE_Fortran_FLAGS_RELEASE "-O3 -qopenmp -qopenmp-simd -unroll -xHost \
+    -qopt-report2 -qopt-report-phase=vec -qopt-report-phase=loop")
 SET(CMAKE_Fortran_FLAGS_DEBUG "-O0 -W1 -CB")
 
 ADD_SUBDIRECTORY(mkl_libs)

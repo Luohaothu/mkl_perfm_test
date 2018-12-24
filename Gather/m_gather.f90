@@ -87,9 +87,6 @@ module m_gather
                     end do
                 end do
             end do
-
-            ! disturb u
-            u(ilg(1, 1), ilg(1, 2), ilg(1, 3)) = u(ilg(1, 1), ilg(1, 2), ilg(1, 3)) + 1.0
         end subroutine trival_gather
 
         subroutine trival_gather2
@@ -116,27 +113,25 @@ module m_gather
                                 + u(ilg(iv, 1) - ilw + 3, ilg(iv, 2) + j, ilg(iv, 3) + k)  * deltax(-ilw + 3) &
                                 + u(ilg(iv, 1) - ilw + 4, ilg(iv, 2) + j, ilg(iv, 3) + k)  * deltax(-ilw + 4) &
                                 + u(ilg(iv, 1) - ilw + 5, ilg(iv, 2) + j, ilg(iv, 3) + k)  * deltax(-ilw + 5) &
-                                + u(ilg(iv, 1) - ilw + 6, ilg(iv, 2) + j, ilg(iv, 3) + k)  * deltax(-ilw + 6) &
-                                + u(ilg(iv, 1) - ilw + 7, ilg(iv, 2) + j, ilg(iv, 3) + k)  * deltax(-ilw + 7)
+                                + u(ilg(iv, 1) - ilw + 6, ilg(iv, 2) + j, ilg(iv, 3) + k)  * deltax(-ilw + 6) !&
+                                !+ u(ilg(iv, 1) - ilw + 7, ilg(iv, 2) + j, ilg(iv, 3) + k)  * deltax(-ilw + 7)
                     end do
                 end do
 
                 do k = -ilw, ilw
-                    u1d(i) = u2d(-ilw, k) * deltay(-ilw) &
+                    u1d(k) = u2d(-ilw, k) * deltay(-ilw) &
                             + u2d(-ilw + 1, k) * deltay(-ilw + 1) &
                             + u2d(-ilw + 2, k) * deltay(-ilw + 2) &
                             + u2d(-ilw + 3, k) * deltay(-ilw + 3) &
                             + u2d(-ilw + 4, k) * deltay(-ilw + 4) &
                             + u2d(-ilw + 5, k) * deltay(-ilw + 5) &
-                            + u2d(-ilw + 6, k) * deltay(-ilw + 6) &
-                            + u2d(-ilw + 7, k) * deltay(-ilw + 7)
+                            + u2d(-ilw + 6, k) * deltay(-ilw + 6) !&
+                            !+ u2d(-ilw + 7, k) * deltay(-ilw + 7)
                 end do
 
-                ulg(iv) = ddot(8, u1d, 1, deltaz, 1)
+                ulg(iv) = ddot(7, u1d, 1, deltaz, 1)
             end do
 
-            ! disturb u
-            u(ilg(1, 1), ilg(1, 2), ilg(1, 3)) = u(ilg(1, 1), ilg(1, 2), ilg(1, 3)) + 1.0
         end subroutine trival_gather2
 
         subroutine trival_scatter
@@ -184,7 +179,7 @@ module m_gather
                     do j = -ilw, ilw
                         do i = -ilw, ilw
                             e_val(e_re(iv)) = deltax(i) * deltay(j) * deltaz(k)
-                            e_col(e_re(iv)) = (ilg(iv, 3) + k) * n * n + (ilg(iv, 2) + j) * n + ilg(iv, 1) + i + 1
+                            e_col(e_re(iv)) = (ilg(iv, 3) + k - 1) * n * n + (ilg(iv, 2) + j - 1) * n + ilg(iv, 1) + i
                             e_re(iv) = e_re(iv) + 1
                         end do
                     end do
@@ -197,11 +192,6 @@ module m_gather
             !status = mkl_sparse_set_mv_hint(e_csr, sparse_operation_non_transpose, e_descr, 1)
             !status = mkl_sparse_optimize(e_csr)
             status = mkl_sparse_d_mv(sparse_operation_non_transpose, 1.0, e_csr, e_descr, u, 0., ulg)
-            ! disturb u
-            u(ilg(1, 1), ilg(1, 2), ilg(1, 3)) = u(ilg(1, 1), ilg(1, 2), ilg(1, 3)) + 1.0
-            status = mkl_sparse_destroy(e_csr)
-!            status = mkl_sparse_set_mv_hint(e_csr, sparse_operation_transpose, e_descr, 1)
-!            status = mkl_sparse_optimize(e_csr)
         end subroutine matrix_gather
 
         subroutine matrix_scatter
@@ -210,6 +200,22 @@ module m_gather
 
             status = mkl_sparse_d_mv(sparse_operation_transpose, 1.0, e_csr, e_descr, ulg, 1.0, u)
         end subroutine matrix_scatter
+
+        subroutine trival_gs
+            implicit none
+            call trival_gather2
+            call trival_scatter
+        end subroutine trival_gs
+
+        subroutine matrix_gs
+            implicit none
+            integer status
+            call matrix_gather
+!            status = mkl_sparse_set_mv_hint(e_csr, sparse_operation_transpose, e_descr, 1)
+!            status = mkl_sparse_optimize(e_csr)
+            call matrix_scatter
+            status = mkl_sparse_destroy(e_csr)
+        end subroutine matrix_gs
 
         subroutine finalize
             implicit none
